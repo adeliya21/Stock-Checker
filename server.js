@@ -7,8 +7,21 @@ const cors        = require('cors');
 const apiRoutes         = require('./routes/api.js');
 const fccTestingRoutes  = require('./routes/fcctesting.js');
 const runner            = require('./test-runner');
+const helmet            = require("helmet")
+require("./db-connection")
 
 const app = express();
+
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", 'trusted-cdn.com'],
+      styleSrc: ["'self'"]
+    }
+  })
+
+)
 
 app.use('/public', express.static(process.cwd() + '/public'));
 
