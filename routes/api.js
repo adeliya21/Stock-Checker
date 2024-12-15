@@ -2,73 +2,71 @@
 const StockModel = require("../models").Stock;
 const fetch = require('node-fetch');
 
-// create stock
+// Create a new stock entry in the database
 async function createStock(stock, like, ip) {
   const newStock = new StockModel({
     symbol: stock,
-    likes: like ? [ip] : [] // If like is true, store the IP
+    likes: like ? [ip] : []
   });
   const savedNew = await newStock.save();
   return savedNew;
 }
 
-// find stock
+// Find an existing stock in the database
 async function findStock(stock) {
-  return await StockModel.findOne({
-    symbol: stock
-  }).exec();
+  return await StockModel.findOne({ symbol: stock }).exec();
 }
 
-// save stock
+// Save or update stock in the database
 async function saveStock(stock, like, ip) {
-  let saved = {};
+  let saved;
   const foundStock = await findStock(stock);
   if (!foundStock) {
-    const createsaved = await createStock(stock, like, ip);
-    saved = createsaved;
-    return saved;
+    const createdStock = await createStock(stock, like, ip);
+    saved = createdStock;
   } else {
     if (like && foundStock.likes.indexOf(ip) === -1) {
-      foundStock.likes.push(ip); // Add IP to the likes if not already present
+      foundStock.likes.push(ip);
     }
     saved = await foundStock.save();
-    return saved;
+  }
+  return saved;
+}
+
+// Fetch stock data from the external API
+async function getStock(stock) {
+  try {
+    const response = await fetch(
+      `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stock}/quote`
+    );
+    if (!response.ok) throw new Error("Failed to fetch stock data");
+    const { symbol, latestPrice } = await response.json();
+    return { symbol, latestPrice };
+  } catch (err) {
+    return { symbol: null, latestPrice: null };
   }
 }
 
-// get stock data from external API
-async function getStock(stock) {
-  const response = await fetch(
-    `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stock}/quote`
-  );
-  const { symbol, latestPrice } = await response.json();
-  return { symbol, latestPrice };
-}
-
-// Exports a function to define API routes for the application.
+// Define API routes
 module.exports = function (app) {
   app.route('/api/stock-prices')
     .get(async function (req, res) {
       const { stock, like } = req.query;
 
-      // Check if the stock is an array (multiple stocks)
+      // Handle multiple stocks (comparison mode)
       if (Array.isArray(stock)) {
         const stock1 = stock[0];
         const stock2 = stock[1];
 
-        // Fetch stock data for both stocks
         const { symbol: symbol1, latestPrice: price1 } = await getStock(stock1);
         const { symbol: symbol2, latestPrice: price2 } = await getStock(stock2);
 
-        // Save the stocks and likes
-        const firstStock = await saveStock(stock1, like, req.ip);
-        const secondStock = await saveStock(stock2, like, req.ip);
+        const firstStock = symbol1 ? await saveStock(stock1, like, req.ip) : { likes: [] };
+        const secondStock = symbol2 ? await saveStock(stock2, like, req.ip) : { likes: [] };
 
-        // Calculate relative likes (difference in likes)
         const relLikes1 = firstStock.likes.length - secondStock.likes.length;
         const relLikes2 = secondStock.likes.length - firstStock.likes.length;
 
-        // Construct the response for both stocks
         const stockData = [
           {
             stock: symbol1,
@@ -82,24 +80,24 @@ module.exports = function (app) {
           }
         ];
 
-        res.json({ stockData });
-        return;
+        return res.json({ stockData });
       }
 
-      // For single stock requests
+      // Handle single stock
       const { symbol, latestPrice } = await getStock(stock);
       if (!symbol) {
-        return res.json({ stockData: { likes: like ? 1 : 0 } });
+        return res.json({ stockData: { stock: null, likes: 0 } });
       }
 
-      const oneStockData = await saveStock(symbol, like, req.ip);
+      const savedStock = await saveStock(symbol, like, req.ip);
 
-      res.json({
+      return res.json({
         stockData: {
           stock: symbol,
           price: latestPrice,
-          likes: oneStockData.likes.length,
+          likes: savedStock.likes.length,
         }
       });
     });
 };
+
