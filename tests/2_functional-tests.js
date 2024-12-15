@@ -24,6 +24,7 @@ suite('Functional Tests', function() {
                 assert.equal(res.status, 200);
                 assert.equal(res.body.stockData.stock, "TSLA");
                 assert.exists(res.body.stockData.price, "TSLA has price");
+                assert.isNumber(res.body.stockData.likes, "TSLA has likes");
                 done();
             })
         })
@@ -37,8 +38,11 @@ suite('Functional Tests', function() {
             .end(function (err, res) {
                 assert.equal(res.status, 200);
                 assert.equal(res.body.stockData.stock, "GOLD");
+                assert.isString(res.body.stockData.stock, "stock symbol is string");
                 assert.equal(res.body.stockData.likes, 1);
                 assert.exists(res.body.stockData.price, "GOLD has price");
+                assert.isNumber(res.body.stockData.price, "price is number");
+                assert.isNumber(res.body.stockData.likes, "GOLD has likes");
                 done();
             })
         })
@@ -52,8 +56,11 @@ suite('Functional Tests', function() {
             .end(function (err, res) {
                 assert.equal(res.status, 200);
                 assert.equal(res.body.stockData.stock, "GOLD");
+                assert.isString(res.body.stockData.stock, "stock symbol is string");
                 assert.equal(res.body.stockData.likes, 1);
                 assert.exists(res.body.stockData.price, "GOLD has price");
+                assert.isNumber(res.body.stockData.price, "price is number");
+                assert.isNumber(res.body.stockData.likes, "GOLD has likes");
                 done();
             })
         })
@@ -70,6 +77,8 @@ suite('Functional Tests', function() {
                 assert.equal(res.body.stockData[1].stock, "T");
                 assert.exists(res.body.stockData[0].price, "AMZN has a price");
                 assert.exists(res.body.stockData[1].price, "T has a price");
+                assert.isNumber(res.body.stockData[0].rel_likes, "AMZN has rel_likes");
+                assert.isNumber(res.body.stockData[1].rel_likes, "T has rel_likes");
                 done();
             })
         })
