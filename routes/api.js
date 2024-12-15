@@ -27,25 +27,23 @@ function saveStock(code, like, ip) {
 }
 
 function parseData(data) {
-  let i = 0
-  let stockData = []
-  let likes = []
-  while (i < data.length) {
-    let stock = { stock: data[i].code, price: parseFloat(data[i+1]) }
-    likes.push(data[i].likes.length)
-    stockData.push(stock)
-    i += 2
+  let stockData = [];
+  let likes = [];
+
+  for (let i = 0; i < data.length; i += 2) {
+    let stock = { stock: data[i].code, price: parseFloat(data[i+1]) };
+    likes.push(data[i].likes.length);
+    stockData.push(stock);
   }
 
-  if (likes.length > 1) {
-    stockData[0].rel_likes = likes[0] - likes[1]
-    stockData[1].rel_likes = likes[1] - likes[0]
-  } else {
-    stockData[0].likes = likes[0]
-    stockData = stockData[0]
+  if (likes.length === 1) {
+    stockData[0].likes = likes[0];
+  } else if (likes.length > 1) {
+    stockData[0].rel_likes = likes[0] - likes[1];
+    stockData[1].rel_likes = likes[1] - likes[0];
   }
-  
-  return stockData
+
+  return stockData;
 }
 
 module.exports = function (app) {
