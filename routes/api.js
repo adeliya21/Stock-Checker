@@ -1,104 +1,85 @@
-"use strict";
-const StockModel = require("../models").Stock;
-const fetch = require("node-fetch");
+'use strict';
 
-async function createStock(stock, like, ip) {
-  const newStock = new StockModel({
-    symbol: stock,
-    likes: like ? [ip] : [],
-  });
-  const savedNew = await newStock.save();
-  return savedNew;
+var mongoose = require('mongoose')
+var objectId = mongoose.Types.ObjectId
+var request = require('request-promise-native')
+
+var stockSchema = new mongoose.Schema({
+  code: String,
+  likes: { type: [String], default: [] }
+})
+
+var Stock = mongoose.model('stock', stockSchema)
+
+function saveStock(code, like, ip) {
+  return Stock.findOne({ code: code })
+    .then(stock => {
+      if (!stock) {
+        let newStock = new Stock({ code: code, likes: like ? [ip] : [] })
+        return newStock.save()
+      } else {
+        if (like && stock.likes.indexOf(ip) === -1) {
+          stock.likes.push(ip)
+        }
+        return stock.save()
+      }
+    })
 }
 
-async function findStock(stock) {
-  return await StockModel.findOne({ symbol: stock }).exec();
-}
-
-async function saveStock(stock, like, ip) {
-  let saved = {};
-  const foundStock = await findStock(stock);
-  if (!foundStock) {
-    const createsaved = await createStock(stock, like, ip);
-    saved = createsaved;
-    return saved;
-  } else {
-    if (like && foundStock.likes.indexOf(ip) === -1) {
-      foundStock.likes.push(ip);
-    }
-    saved = await foundStock.save();
-    return saved;
+function parseData(data) {
+  let i = 0
+  let stockData = []
+  let likes = []
+  while (i < data.length) {
+    let stock = { stock: data[i].code, price: parseFloat(data[i+1]) }
+    likes.push(data[i].likes.length)
+    stockData.push(stock)
+    i += 2
   }
-}
 
-async function getStock(stock) {
-  const response = await fetch(
-    `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stock}/quote`
-  );
-  const { symbol, latestPrice } = await response.json();
-  return { symbol, latestPrice };
+  if (likes.length > 1) {
+    stockData[0].rel_likes = likes[0] - likes[1]
+    stockData[1].rel_likes = likes[1] - likes[0]
+  } else {
+    stockData[0].likes = likes[0]
+    stockData = stockData[0]
+  }
+  
+  return stockData
 }
 
 module.exports = function (app) {
-  app.route("/api/stock-prices").get(async function (req, res) {
-    const { stock, like } = req.query;
-    if (Array.isArray(stock)) {
-      console.log("stocks", stock);
-
-      const { symbol, latestPrice } = await getStock(stock[0]);
-      const { symbol: symbol2, latestPrice: latestPrice2 } = await getStock(
-        stock[1]
-      );
-
-      const firststock = await saveStock(stock[0], like, req.ip);
-      const secondstock = await saveStock(stock[1], like, req.ip);
-
-      let stockData = [];
-      if (!symbol) {
-        stockData.push({
-          rel_likes: firststock.likes.length - secondstock.likes.length,
-        });
-      } else {
-        stockData.push({
-          stock: symbol,
-          price: latestPrice,
-          rel_likes: firststock.likes.length - secondstock.likes.length,
-        });
+  
+  app.get('/api/testing', (req, res) => {
+    console.log(req.connection)
+    
+    res.json({ IP: req.ip })
+  })
+  
+  app.route('/api/stock-prices')
+    .get(function (req, res) {
+      let code = req.query.stock || ''
+      if (!Array.isArray(code)) {
+        code = [code]
       }
-
-      if (!symbol2) {
-        stockData.push({
-          rel_likes: secondstock.likes.length - firststock.likes.length,
-        });
-      } else {
-        stockData.push({
-          stock: symbol2,
-          price: latestPrice2,
-          rel_likes: secondstock.likes.length - firststock.likes.length,
-        });
-      }
-
-      res.json({
-        stockData,
-      });
-      return;
-    }
-    const { symbol, latestPrice } = await getStock(stock);
-    if (!symbol) {
-      res.json({ stockData: { likes: like ? 1 : 0 } });
-      return;
-    }
-
-    const oneStockData = await saveStock(symbol, like, req.ip);
-    console.log("One Stock Data", oneStockData);
-
-    res.json({
-      stockData: {
-        stock: symbol,
-        price: latestPrice,
-        likes: oneStockData.likes.length,
-      },
-    });
-  });
-};
+    
+      let promises = []
+      code.forEach(code => {
+        promises.push(saveStock(code.toUpperCase(), req.query.like, req.ip))
+        
+        let url = `https://api.iextrading.com/1.0/stock/${code.toUpperCase()}/price`
+        promises.push(request(url))
+      })
+    
+      Promise.all(promises)
+        .then(data => {
+          let stockData = parseData(data)
+          res.json({ stockData })
+        })
+        .catch(err => {
+          console.log(err)
+          res.send(err)
+        })
+    })
+}
 
